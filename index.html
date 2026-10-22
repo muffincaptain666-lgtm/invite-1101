@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="format-detection" content="telephone=no" />
+<meta name="theme-color" content="#070403" />
+<title>一份邀请</title>
+<!--
+  使用说明
+  1. 双击本文件即可在电脑浏览器预览；在微信里打开需要一个公网 https 地址。
+  2. 想收到"对方点了愿意"的通知，把下面 CONFIG.notifyUrl 填成一个支持 GET 的推送地址。
+     PushPlus（免费，微信推送）：
+       https://www.pushplus.plus/send?token=你的TOKEN&title=有人接受了邀请&content=刚刚有人点了我愿意{time}
+     {time} 会被替换成点击时间。
+  3. 信里的日期、名字、正文在 <div id="paper"> 里改。
+-->
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; overflow:hidden; }
+  body {
+    font-family:"PingFang SC","Hiragino Sans GB","Noto Sans SC",system-ui,-apple-system,sans-serif;
+    color:#fff; -webkit-font-smoothing:antialiased; -webkit-user-select:none; user-select:none;
+    position:fixed; inset:0; touch-action:manipulation;
+    background:radial-gradient(ellipse 140% 92% at 50% 30%, #1c1109 0%, #0c0603 46%, #040201 100%);
+  }
+
+  /* ================= 场景 ================= */
+  #world {
+    position:absolute; inset:0; transform-origin:50% 52%;
+    transform:scale(1);
+    transition:transform 2.8s cubic-bezier(.32,.06,.24,1);
+    will-change:transform;
+  }
+  #world.zoom { transform:scale(1.42); }
+
+  #table {
+    position:absolute; left:0; right:0; bottom:0; height:66%;
+    -webkit-mask-image:linear-gradient(to bottom, transparent 0%, rgba(0,0,0,.45) 11%, #000 28%);
+    mask-image:linear-gradient(to bottom, transparent 0%, rgba(0,0,0,.45) 11%, #000 28%);
+    background:
+      repeating-linear-gradient(178deg, rgba(255,205,150,.022) 0 1px, transparent 1px 19px),
+      repeating-linear-gradient(174deg, rgba(0,0,0,.09) 0 2px, transparent 2px 31px),
+      linear-gradient(to bottom,
+        rgba(74,40,20,0) 0%,
+        rgba(74,40,20,.55) 12%,
+        #3a1e0d 34%,
+        #24130a 64%,
+        #110702 100%);
+  }
+  #table::before {
+    content:""; position:absolute; left:0; right:0; top:0; height:70%;
+    background:radial-gradient(ellipse 72% 100% at 50% 6%, rgba(255,205,150,.16) 0%, rgba(255,180,120,.05) 40%, transparent 70%);
+  }
+
+  /* 柔光 */
+  #halo {
+    position:absolute; left:50%; top:50%; width:540px; height:540px;
+    margin:-270px 0 0 -270px; pointer-events:none;
+    background:radial-gradient(circle, rgba(255,214,160,.22) 0%, rgba(255,186,120,.09) 34%, rgba(255,170,100,0) 66%);
+    animation:haloPulse 7s ease-in-out infinite;
+  }
+  @keyframes haloPulse {
+    0%,100% { opacity:.75; transform:scale(.96); }
+    50%     { opacity:1;   transform:scale(1.05); }
+  }
+
+  /* 信封 */
+  #envWrap {
+    position:absolute; left:50%; top:50%;
+    width:210px; height:140px; margin:-70px 0 0 -105px;
+    cursor:pointer; animation:floaty 5s ease-in-out infinite;
+  }
+  @keyframes floaty { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-7px); } }
+
+  #envelope { position:relative; width:100%; height:100%; perspective:1000px; }
+  .env-shadow {
+    position:absolute; left:6%; right:6%; bottom:-16px; height:26px;
+    background:radial-gradient(ellipse, rgba(0,0,0,.72) 0%, transparent 72%); filter:blur(4px);
+  }
+  .env-body {
+    position:absolute; inset:0; border-radius:5px;
+    background:linear-gradient(158deg,#f6edda 0%,#eadec3 46%,#dccdae 100%);
+    box-shadow:0 14px 38px rgba(0,0,0,.62), 0 0 0 1px rgba(255,235,190,.24), inset 0 0 30px rgba(140,105,55,.16);
+  }
+  .env-body::before {
+    content:""; position:absolute; inset:0; border-radius:5px;
+    background:linear-gradient(178deg, rgba(255,250,235,.5), rgba(150,115,65,.22));
+    -webkit-clip-path:polygon(0 100%, 50% 42%, 100% 100%); clip-path:polygon(0 100%, 50% 42%, 100% 100%);
+  }
+  .env-body::after {
+    content:""; position:absolute; inset:0; border-radius:5px;
+    background:linear-gradient(90deg, rgba(0,0,0,.07), transparent 18%, transparent 82%, rgba(0,0,0,.07));
+  }
+  .env-flap {
+    position:absolute; left:0; top:0; width:100%; height:64%;
+    background:linear-gradient(180deg,#faf2e2 0%,#f0e4c9 55%,#e2d3b2 100%);
+    -webkit-clip-path:polygon(0 0, 100% 0, 50% 100%); clip-path:polygon(0 0, 100% 0, 50% 100%);
+    transform-origin:top center; transform:rotateX(0deg);
+    transition:transform .95s cubic-bezier(.4,0,.2,1);
+    z-index:4; -webkit-backface-visibility:hidden; backface-visibility:hidden;
+    filter:drop-shadow(0 3px 5px rgba(90,60,20,.4));
+  }
+  #envelope.open .env-flap { transform:rotateX(-172deg); }
+  .env-wax {
+    position:absolute; left:50%; top:56%; width:30px; height:30px; margin:-15px 0 0 -15px;
+    border-radius:50%; z-index:5;
+    background:radial-gradient(circle at 35% 30%, #e8574a, #a8231b 62%, #7a1310 100%);
+    box-shadow:0 3px 9px rgba(0,0,0,.6), inset -2px -2px 6px rgba(0,0,0,.35), inset 2px 2px 5px rgba(255,150,130,.4);
+    transition:opacity .45s ease, transform .45s ease;
+  }
+  #envelope.open .env-wax { opacity:0; transform:scale(.5) rotate(-25deg); }
+
+  /* 提示 */
+  #hint {
+    position:absolute; left:0; right:0; bottom:16%; text-align:center;
+    font-size:13px; letter-spacing:.24em; color:rgba(255,226,180,.85);
+    opacity:0; transform:translateY(8px); pointer-events:none; z-index:5;
+    transition:opacity 1.2s ease, transform 1.2s ease;
+    text-shadow:0 0 16px rgba(255,150,50,.6);
+  }
+  #hint.show { opacity:1; transform:translateY(0); animation:pulseHint 2.6s ease-in-out infinite; }
+  @keyframes pulseHint { 0%,100% { opacity:.5; } 50% { opacity:1; } }
+
+  /* 变暗层 */
+  #dim {
+    position:absolute; inset:0; z-index:15; pointer-events:none;
+    background:rgba(10,5,2,0); transition:background 1.1s ease;
+  }
+  #dim.show {
+    background:radial-gradient(ellipse 74% 62% at 50% 44%,
+      rgba(8,4,1,.72) 0%, rgba(8,4,1,.48) 58%, rgba(8,4,1,.26) 100%);
+  }
+
+  /* ================= 信纸 ================= */
+  #paperWrap {
+    position:absolute; inset:0; z-index:20;
+    display:flex; align-items:center; justify-content:center; pointer-events:none;
+  }
+  #paper {
+    position:relative; width:min(85vw,410px); max-height:68vh; padding:40px 30px 44px;
+    border-radius:3px; color:#3a2b1b; background:#fdfaf0;
+    background-image:repeating-linear-gradient(to bottom, transparent 0 32px, rgba(122,96,58,.13) 32px 33px);
+    background-position:0 8px;
+    box-shadow:0 30px 90px rgba(0,0,0,.78), 0 0 0 1px rgba(255,232,180,.3), inset 0 0 60px rgba(190,160,110,.16);
+    opacity:0; transform:scale(.2) translateY(28vh) rotate(-7deg);
+    transition:opacity .55s ease, transform 1.2s cubic-bezier(.2,.9,.24,1);
+    will-change:transform, opacity; -webkit-backface-visibility:hidden; backface-visibility:hidden;
+  }
+  #paper.show { opacity:1; transform:scale(1) translateY(0) rotate(-.7deg); }
+  #paper p {
+    font-family:"Kaiti SC","STKaiti","KaiTi","楷体",serif;
+    font-size:17px; line-height:32px; letter-spacing:.055em; text-indent:2em; text-align:justify;
+  }
+  #paper .sign {
+    margin-top:16px; text-align:right; text-indent:0;
+    font-size:14px; opacity:.6; letter-spacing:.1em;
+  }
+  #paper .sign span {
+    display:inline-block; padding:0 4px;
+    background:linear-gradient(to right, rgba(253,250,240,0), #fdfaf0 18%);
+  }
+
+  /* ================= 特效画布 ================= */
+  #fx {
+    position:absolute; inset:0; z-index:30; pointer-events:none;
+    opacity:0; transition:opacity .3s;
+  }
+  #fx.on { opacity:1; }
+
+  /* ================= 按钮 ================= */
+  #yes {
+    position:absolute; left:50%; bottom:9%; z-index:25;
+    padding:15px 44px; font-size:17px; font-weight:600; letter-spacing:.14em;
+    color:#3d2508; border:0; border-radius:40px; -webkit-appearance:none;
+    background:linear-gradient(180deg, #ffe9a8 0%, #ffcf5e 46%, #f0a832 100%);
+    box-shadow:0 10px 30px rgba(255,160,40,.42), inset 0 2px 0 rgba(255,255,255,.5), inset 0 -3px 10px rgba(180,110,10,.35);
+    opacity:0; pointer-events:none; transform:translate(-50%, 22px);
+    transition:opacity 1.7s ease, transform 1.7s ease, filter .2s;
+  }
+  #yes.show { opacity:1; pointer-events:auto; transform:translate(-50%, 0); }
+  #yes:active { filter:brightness(.94); }
+
+  #no {
+    position:fixed; z-index:60; width:88px; height:34px;
+    font-size:12px; letter-spacing:.05em; color:rgba(255,255,255,.42);
+    background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.13);
+    border-radius:18px; -webkit-appearance:none; visibility:hidden;
+    transition:none;
+  }
+  #no.jump { animation:jumpPop .24s ease-out; }
+  @keyframes jumpPop {
+    0%   { transform:scale(.6); opacity:.35; }
+    100% { transform:scale(1);  opacity:1; }
+  }
+
+  /* 燃烧 */
+  #paper.burning { transition:none; animation:heat 1.2s ease-in forwards; }
+  @keyframes heat {
+    0%   { filter:none; }
+    30%  { filter:sepia(.5) brightness(1.05) contrast(1.06); }
+    60%  { filter:sepia(1) hue-rotate(-16deg) brightness(.72) contrast(1.25); }
+    100% { filter:sepia(1) hue-rotate(-18deg) brightness(.28) contrast(1.4) blur(.6px); }
+  }
+
+  #done {
+    position:absolute; left:0; right:0; top:50%; transform:translateY(-50%);
+    text-align:center; font-size:15px; letter-spacing:.3em; text-indent:.3em;
+    color:rgba(255,214,150,0); transition:color 2s ease;
+    pointer-events:none; z-index:40;
+  }
+  #done.show { color:rgba(255,214,150,.92); }
+</style>
+</head>
+<body>
+
+<div id="world">
+  <div id="table"></div>
+  <div id="halo"></div>
+
+  <div id="envWrap">
+    <div id="envelope">
+      <div class="env-shadow"></div>
+      <div class="env-body"></div>
+      <div class="env-flap"></div>
+      <div class="env-wax"></div>
+    </div>
+  </div>
+</div>
+
+<div id="dim"></div>
+<div id="hint">轻 触 信 封</div>
+
+<div id="paperWrap">
+  <div id="paper">
+    <p>2026年11月1日，Mr.Zeno 为庆祝他的诞辰，将举办一次聚会。您收到了一份邀请函，请问您是否愿意参加。</p>
+    <div class="sign"><span>—— 静候回音</span></div>
+  </div>
+</div>
+
+<canvas id="fx"></canvas>
+<div id="done">谢 谢 你 来</div>
+
+<button id="yes">我 愿 意 ！</button>
+<button id="no">不方便...</button>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- 配置 ---------- */
+  var CONFIG = {
+    notifyUrl: '',            // 留空则只在控制台打印
+    notifyTitle: '有人接受了生日邀请'
+  };
+
+  /* ---------- 元素 ---------- */
+  var world    = document.getElementById('world');
+  var envWrap  = document.getElementById('envWrap');
+  var envelope = document.getElementById('envelope');
+  var hint     = document.getElementById('hint');
+  var dim      = document.getElementById('dim');
+  var paper    = document.getElementById('paper');
+  var yesBtn   = document.getElementById('yes');
+  var noBtn    = document.getElementById('no');
+  var cvs      = document.getElementById('fx');
+  var done     = document.getElementById('done');
+  var ctx      = cvs.getContext('2d');
+
+  var W = 0, H = 0, DPR = 1;
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    cvs.width  = Math.floor(W * DPR);
+    cvs.height = Math.floor(H * DPR);
+    cvs.style.width  = W + 'px';
+    cvs.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  resize();
+  window.addEventListener('resize', function () {
+    resize();
+    clampNo();
+  });
+
+  /* ---------- 火光粒子贴图（预渲染，省性能） ---------- */
+  var sprite = document.createElement('canvas');
+  sprite.width = sprite.height = 64;
+  (function () {
+    var s = sprite.getContext('2d');
+    var g = s.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0,    'rgba(255,246,205,1)');
+    g.addColorStop(0.28, 'rgba(255,190,80,.78)');
+    g.addColorStop(0.62, 'rgba(255,100,15,.30)');
+    g.addColorStop(1,    'rgba(180,30,0,0)');
+    s.fillStyle = g;
+    s.fillRect(0, 0, 64, 64);
+  })();
+
+  /* ---------- 流程 ---------- */
+  var opened = false;
+  var burning = false;
+
+  setTimeout(function () { world.classList.add('zoom'); }, 1500);
+  setTimeout(function () { hint.classList.add('show'); }, 4200);
+
+  function openLetter() {
+    if (opened) return;
+    opened = true;
+    hint.classList.remove('show');
+    envelope.classList.add('open');
+    dim.classList.add('show');
+
+    setTimeout(function () { paper.classList.add('show'); }, 620);
+
+    // 信纸飞入的同时，"我愿意"就开始浮现
+    setTimeout(function () { yesBtn.classList.add('show'); }, 700);
+  }
+
+  envWrap.addEventListener('click', openLetter);
+
+  /* ---------- 不方便按钮：瞬移 ---------- */
+  var noPos = { x: 0, y: 0 };
+
+  function applyNo() {
+    noBtn.style.left = noPos.x + 'px';
+    noBtn.style.top  = noPos.y + 'px';
+  }
+
+  function clampNo() {
+    var w = noBtn.offsetWidth  || 88;
+    var h = noBtn.offsetHeight || 34;
+    noPos.x = Math.max(8, Math.min(noPos.x, window.innerWidth  - w - 8));
+    noPos.y = Math.max(8, Math.min(noPos.y, window.innerHeight - h - 8));
+    applyNo();
+  }
+
+  // 初始：右下角
+  noPos.x = window.innerWidth  - 88 - 20;
+  noPos.y = window.innerHeight - 34 - 30;
+  applyNo();
+  noBtn.style.visibility = 'visible';
+
+  function teleport() {
+    var w = noBtn.offsetWidth  || 88;
+    var h = noBtn.offsetHeight || 34;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var pad = 14;
+    var yr = yesBtn.getBoundingClientRect();
+    var minD = Math.min(vw, vh) * 0.32;
+
+    var cands = [];
+    var fallback = null, fallbackD = -1;
+
+    for (var i = 0; i < 60; i++) {
+      var x = pad + Math.random() * Math.max(1, vw - w - pad * 2);
+      var y = pad + Math.random() * Math.max(1, vh - h - pad * 2);
+
+      var hitYes = (x < yr.right + 12 && x + w > yr.left - 12 &&
+                    y < yr.bottom + 12 && y + h > yr.top - 12);
+      if (hitYes) continue;
+
+      var d = Math.hypot(x - noPos.x, y - noPos.y);
+      if (d > fallbackD) { fallbackD = d; fallback = { x: x, y: y }; }
+      if (d >= minD) cands.push({ x: x, y: y });
+    }
+
+    var pick = cands.length ? cands[(Math.random() * cands.length) | 0] : fallback;
+    if (!pick) return;
+
+    noPos = pick;
+    noBtn.classList.remove('jump');
+    void noBtn.offsetWidth;
+    noBtn.classList.add('jump');
+    applyNo();
+  }
+
+  noBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    teleport();
+  });
+
+  /* ---------- 我愿意 ---------- */
+  yesBtn.addEventListener('click', function () {
+    if (burning) return;
+    burning = true;
+    yesBtn.style.display = 'none';
+    noBtn.style.display  = 'none';
+    notifyYes();
+    startBurn();
+  });
+
+  /* ---------- 通知 ---------- */
+  function notifyYes() {
+    var t = new Date().toLocaleString('zh-CN', { hour12: false });
+    var log = { event: 'accept', time: t, ua: navigator.userAgent };
+
+    if (!CONFIG.notifyUrl) {
+      console.log('[邀请函] 未配置 notifyUrl，本次点击记录：', log);
+      return;
+    }
+
+    var url = CONFIG.notifyUrl
+      .replace('{title}', encodeURIComponent(CONFIG.notifyTitle))
+      .replace('{time}',  encodeURIComponent(t))
+      + (CONFIG.notifyUrl.indexOf('?') >= 0 ? '&' : '?') + '_t=' + Date.now();
+
+    // 用 Image 发 GET，可绕过跨域限制
+    var img = new Image();
+    img.onload = img.onerror = function () { img = null; };
+    img.src = url;
+  }
+
+  /* ---------- 燃烧 ---------- */
+  function startBurn() {
+    var r = paper.getBoundingClientRect();
+    var t0 = performance.now();
+    var DUR = 2900;
+    var parts = [];
+
+    cvs.classList.add('on');
+    paper.classList.add('burning');
+
+    function loop(now) {
+      var p = Math.min(1, (now - t0) / DUR);
+      var cut = Math.min(112, p * 112);
+
+      var m = 'linear-gradient(to top, transparent ' + cut + '%, rgba(0,0,0,.55) ' +
+              Math.min(cut + 5, 100) + '%, #000 ' + Math.min(cut + 13, 100) + '%)';
+      paper.style.webkitMaskImage = m;
+      paper.style.maskImage = m;
+
+      ctx.clearRect(0, 0, W, H);
+
+      var edgeY = r.bottom - r.height * Math.min(p, 1);
+
+      // 沿燃烧线补充火焰粒子
+      if (p < 1) {
+        for (var i = 0; i < 9; i++) {
+          parts.push({
+            x: r.left + Math.random() * r.width,
+            y: edgeY + (Math.random() - 0.5) * 12,
+            vx: (Math.random() - 0.5) * 1.6,
+            vy: -1.2 - Math.random() * 2.8,
+            life: 1,
+            size: 10 + Math.random() * 22
+          });
+        }
+      }
+
+      ctx.globalCompositeOperation = 'lighter';
+
+      // 烧穿处的橙光带
+      if (p > 0 && p < 1) {
+        var g0 = ctx.createLinearGradient(0, edgeY - 34, 0, edgeY + 14);
+        g0.addColorStop(0,    'rgba(255,170,60,0)');
+        g0.addColorStop(0.62, 'rgba(255,150,40,.42)');
+        g0.addColorStop(1,    'rgba(255,80,0,.12)');
+        ctx.fillStyle = g0;
+        ctx.fillRect(r.left - 6, edgeY - 34, r.width + 12, 48);
+      }
+
+      for (var j = parts.length - 1; j >= 0; j--) {
+        var q = parts[j];
+        q.x += q.vx;
+        q.y += q.vy;
+        q.vy -= 0.022;
+        q.vx *= 0.992;
+        q.life -= 0.016;
+
+        if (q.life <= 0 || q.y < -60) { parts.splice(j, 1); continue; }
+
+        var rr = q.size * (0.55 + q.life * 0.55);
+        ctx.globalAlpha = Math.min(1, q.life * 0.92);
+        ctx.drawImage(sprite, q.x - rr, q.y - rr, rr * 2, rr * 2);
+      }
+
+      ctx.globalAlpha = 1;
+
+      if (p < 1 || parts.length) {
+        requestAnimationFrame(loop);
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.clearRect(0, 0, W, H);
+        cvs.classList.remove('on');
+        paper.style.display = 'none';
+        done.classList.add('show');
+      }
+    }
+
+    requestAnimationFrame(loop);
+  }
+})();
+</script>
+</body>
+</html>
